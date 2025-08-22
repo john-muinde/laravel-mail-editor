@@ -442,7 +442,24 @@ class MailEclipse
             'name' => $name,
         ]);
 
-        if ($request->input('markdown')) {
+        // Handle template association
+        $templateSlug = $request->input('template');
+        $template = null;
+        if ($templateSlug) {
+            $template = self::getTemplates()->first(function ($tpl) use ($templateSlug) {
+                return $tpl->template_slug === $templateSlug;
+            });
+        }
+
+        if ($template) {
+            // Always use the template_slug for the view name (fixes association)
+            $viewName = $template->template_slug;
+            if (isset($template->template_type) && $template->template_type === 'markdown') {
+                $params->put('--markdown', 'maileclipse::templates.' . $viewName);
+            } else {
+                $params->put('--view', 'maileclipse::templates.' . $viewName);
+            }
+        } else if ($request->input('markdown')) {
             $params->put('--markdown', $request->input('markdown'));
         }
 
@@ -460,10 +477,8 @@ class MailEclipse
         }
 
         return response()->json([
-
             'status' => 'error',
             'message' => 'mailable not created successfully',
-
         ]);
     }
 

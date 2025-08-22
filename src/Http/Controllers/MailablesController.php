@@ -29,7 +29,7 @@ class MailablesController extends Controller
 
         $mailables = (null !== $mailables) ? $mailables->sortBy('name') : collect([]);
 
-        return view(MailEclipse::VIEW_NAMESPACE.'::sections.mailables', compact('mailables'));
+        return view(MailEclipse::VIEW_NAMESPACE . '::sections.mailables', compact('mailables'));
     }
 
     public function generateMailable(Request $request)
@@ -47,18 +47,18 @@ class MailablesController extends Controller
 
         $resource = $mailable->first();
 
-        return view(MailEclipse::VIEW_NAMESPACE.'::sections.view-mailable')->with(compact('resource'));
+        return view(MailEclipse::VIEW_NAMESPACE . '::sections.view-mailable')->with(compact('resource'));
     }
 
     public function editMailable($name)
     {
         $templateData = MailEclipse::getMailableTemplateData($name);
 
-        if (! $templateData) {
+        if (!$templateData) {
             return redirect()->route('viewMailable', ['name' => $name]);
         }
 
-        return view(MailEclipse::VIEW_NAMESPACE.'::sections.edit-mailable-template', compact('templateData', 'name'));
+        return view(MailEclipse::VIEW_NAMESPACE . '::sections.edit-mailable-template', compact('templateData', 'name'));
     }
 
     public function parseTemplate(Request $request)
@@ -93,7 +93,7 @@ class MailablesController extends Controller
 
     public function delete(Request $request)
     {
-        $mailableFile = config('maileclipse.mailables_dir').'/'.$request->mailablename.'.php';
+        $mailableFile = config('maileclipse.mailables_dir') . '/' . $request->mailablename . '.php';
 
         if (file_exists($mailableFile)) {
             unlink($mailableFile);
@@ -118,5 +118,44 @@ class MailablesController extends Controller
         $email = $request->get('email') ?? config('maileclipse.test_mail');
 
         MailEclipse::sendTest($request->get('name'), $email);
+    }
+
+    public function updateTemplateAssociation(Request $request, $name)
+    {
+        $templateSlug = $request->input('template');
+        $template = \Qoraiche\MailEclipse\Facades\MailEclipse::getTemplates()->first(function ($tpl) use ($templateSlug) {
+            return $tpl->template_slug === $templateSlug;
+        });
+        if (!$template) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Template not found.'
+            ]);
+        }
+        // Find the mailable file
+        $mailablesDir = config('maileclipse.mailables_dir');
+        $mailableFile = $mailablesDir . '/' . $name . '.php';
+        if (!file_exists($mailableFile)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Mailable file not found.'
+            ]);
+        }
+        // Read and update the content() method to use the new template
+        $contents = file_get_contents($mailableFile);
+        $pattern = '/public function content\(\): Content\s*\{[^}]*return new Content\(([^)]*)\);[^}]*\}/s';
+        $replacement = "public function content(): Content\n    {\n        return new Content(\n            view: 'maileclipse::templates.{$template->template_slug}',\n        );\n    }";
+        $newContents = preg_replace($pattern, $replacement, $contents);
+        if ($newContents === null) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to update mailable.'
+            ]);
+        }
+        file_put_contents($mailableFile, $newContents);
+        return response()->json([
+            'status' => 'ok',
+            'message' => 'Template association updated.'
+        ]);
     }
 }
