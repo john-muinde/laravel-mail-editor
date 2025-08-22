@@ -474,7 +474,7 @@ class MailEclipse
      *
      * @throws \ReflectionException
      */
-    protected static function mailablesList(): array|null
+    protected static function mailablesList(): Collection|null
     {
         $fqcns = [];
 
@@ -576,7 +576,7 @@ class MailEclipse
                 );
             });
 
-            return $collection->all();
+            return $collection;
         }
     }
 
